@@ -1,87 +1,95 @@
 @echo off
-setlocal
+setlocal EnableExtensions EnableDelayedExpansion
 
-:: Define directories to link
-set DIRS=LIVE EPTU PTU TECH-PREVIEW
+:: 0. Change this line depending on your installs
+set "DIRS=LIVE EPTU PTU HOTFIX TECH-PREVIEW"
 
-:: Change to the directory where the script is located
-cd /d %~dp0
-
-:: Ensure _Backup directory and its subdirectories exist
-if not exist "_Backup\Screenshots" mkdir "_Backup\Screenshots"
-if not exist "_Backup\Mappings" mkdir "_Backup\Mappings"
-if not exist "_Backup\CustomCharacters" mkdir "_Backup\CustomCharacters"
-
-:: Iterate over each directory
-for %%d in (%DIRS%) do (
-    echo %%d
-    :: Check if directory exists, if not create it
-    if not exist "%%d" mkdir "%%d"
-
-    :: Change to the target directory
-    cd "%%d"
-
-    :: Check and handle Screenshots directory
-    if exist "Screenshots" (
-        dir | find /i "<SYMLINKD>" | find /i "Screenshots" >nul
-        if errorlevel 1 (
-            REM The folder is not a symbolic link.
-            echo Moving contents of Screenshots from %%d to _Backup\Screenshots...
-            xcopy "Screenshots\*" "..\_Backup\Screenshots\" /S /I /Y
-            rd /s /q "Screenshots"
-            echo Creating symbolic link in %%d pointing to ..\_Backup\Screenshots...
-            mklink /D "screenshots" "..\_Backup\Screenshots"
-        ) else (
-            REM The folder is a symbolic link. Do nothing
-        )
-    ) else (
-        echo Creating symbolic link in %%d pointing to ..\_Backup\Screenshots...
-        mklink /D "screenshots" "..\_Backup\Screenshots"
-    )
-    
-    :: Check and handle Mappings directory
-    if exist "user\client\0\Controls\Mappings" (
-        dir "user\client\0\Controls" | find /i "<SYMLINKD>" | find /i "Mappings" >nul
-        if errorlevel 1 (
-            REM The folder is not a symbolic link.
-            echo Moving contents of Mappings from %%d to _Backup\Mappings...
-            xcopy "user\client\0\Controls\Mappings\*" "..\_Backup\Mappings\" /S /I /Y
-            rd /s /q "user\client\0\Controls\Mappings"
-            echo Creating symbolic link in %%d pointing to ..\_Backup\Mappings...
-            mklink /D "user\client\0\Controls\Mappings" "..\..\..\..\..\_Backup\Mappings"
-        ) else (
-            REM The folder is a symbolic link. Do nothing
-        )
-    ) else (
-        echo Creating directory structure for Mappings in %%d...
-        mkdir "user\client\0\Controls"
-        echo Creating symbolic link in %%d pointing to ..\_Backup\Mappings...
-        mklink /D "user\client\0\Controls\Mappings" "..\..\..\..\..\_Backup\Mappings"
-    )
-    
-    :: Check and handle Custom Characters directory
-    if exist "user\client\0\CustomCharacters" (
-        dir "user\client\0" | find /i "<SYMLINKD>" | find /i "CustomCharacters" >nul
-        if errorlevel 1 (
-            REM The folder is not a symbolic link.
-            echo Moving contents of CustomCharacters from %%d to _Backup\CustomCharacters...
-            xcopy "user\client\0\CustomCharacters\*" "..\_Backup\CustomCharacters\" /S /I /Y
-            rd /s /q "user\client\0\CustomCharacters"
-            echo Creating symbolic link in %%d pointing to ..\_Backup\CustomCharacters...
-            mklink /D "user\client\0\CustomCharacters" "..\..\..\..\_Backup\CustomCharacters"
-        ) else (
-            REM The folder is a symbolic link. Do nothing
-        )
-    ) else (
-        echo Creating directory structure for CustomCharacters in %%d...
-        mkdir "user\client\0"
-        echo Creating symbolic link in %%d pointing to ..\_Backup\CustomCharacters...
-        mklink /D "user\client\0\CustomCharacters" "..\..\..\..\_Backup\CustomCharacters"
-    )
-
-    :: Go back to the _Backup directory
-    cd ".."
+:: ─────────────────────────────────────────────────────────
+:: 1. Run as Administrator ?
+>nul 2>&1 net session || (
+    echo.
+    echo ERROR: Please run this script as Administrator.
+    echo.
+    pause
+    exit /b 1
 )
 
-echo All symbolic links have been created successfully.
+:: ─────────────────────────────────────────────────────────
+:: 2. Preparations
+cd /d "%~dp0"
+for %%F in (Screenshots Mappings CustomCharacters) do (
+    if not exist "_Backup\%%F" mkdir "_Backup\%%F"
+)
+
+echo.
+
+:: ─────────────────────────────────────────────────────────
+:: 3. Loop on each build
+for %%B in (%DIRS%) do (
+    if exist "%%B\" (
+        echo == %%B ==
+        pushd "%%B" >nul
+
+            call :Process "Screenshots"                     "..\_Backup\Screenshots"
+            call :Process "user\client\0\Controls\Mappings" "..\..\..\..\..\_Backup\Mappings"
+            call :Process "user\client\0\CustomCharacters"  "..\..\..\..\_Backup\CustomCharacters"
+
+        popd >nul
+        echo.
+    ) else (
+        echo == %%B ==  
+        echo SKIP - folder not found
+        echo.
+    )
+)
+
+echo All done.
+echo.
 pause
+exit /b 0
+
+:: ─────────────────────────────────────────────────────────
+:Process <TargetPath> <LinkDestination>
+::     Shows BKP:OK/SKIP/ERR  +  LNK:OK/SKIP/ERR
+setlocal EnableDelayedExpansion
+set "TARGET=%~1"
+set "DEST=%~2"
+
+:: Short name for display
+for %%Z in ("!TARGET!") do (
+    set "NAME=%%~nxZ"
+    set "PARENT=%%~dpZ"
+)
+
+set "BKP=SKIP"
+set "LNK=SKIP"
+
+:: Is TARGET a real folder?
+if exist "!TARGET!\" (
+    dir /AL "!PARENT!" 2>nul | find /i "<SYMLINKD>" | find /i "!NAME!" >nul
+    if errorlevel 1 (
+        rem ── Real folder: back it up
+        xcopy "!TARGET!\*" "..\_Backup\!NAME!\" /E /H /I /Y /Q >nul 2>&1
+        rd /s /q "!TARGET!" 2>nul
+        set "BKP=OK"
+    ) else (
+        rem Already a symlink → nothing to do
+        goto :print
+    )
+)
+
+:: Ensure container tree exists (for new link)
+if not exist "!PARENT!" mkdir "!PARENT!" >nul 2>&1
+
+:: Create (or recreate) symlink
+mklink /D "!TARGET!" "!DEST!" >nul 2>&1
+if errorlevel 1 (
+    if "!LNK!"=="SKIP" (set "LNK=ERR") else set "LNK=ERR"
+) else (
+    set "LNK=OK"
+)
+
+:print
+set "dots=..............."
+call echo !NAME! !dots:~0,15! BKP:!BKP!  LNK:!LNK!
+endlocal & exit /b
