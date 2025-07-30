@@ -17,7 +17,7 @@ set "DIRS=LIVE EPTU PTU HOTFIX TECH-PREVIEW"
 :: ─────────────────────────────────────────────────────────
 :: 2. Preparations
 cd /d "%~dp0"
-for %%F in (Screenshots Mappings CustomCharacters) do (
+for %%F in (Screenshots Mappings CustomCharacters Profiles) do (
     if not exist "_Backup\%%F" mkdir "_Backup\%%F"
 )
 
@@ -33,6 +33,7 @@ for %%B in (%DIRS%) do (
             call :Process "Screenshots"                     "..\_Backup\Screenshots"
             call :Process "user\client\0\Controls\Mappings" "..\..\..\..\..\_Backup\Mappings"
             call :Process "user\client\0\CustomCharacters"  "..\..\..\..\_Backup\CustomCharacters"
+            call :Process "user\client\0\Profiles" "..\..\..\..\_Backup\Profiles"
 
         popd >nul
         echo.
