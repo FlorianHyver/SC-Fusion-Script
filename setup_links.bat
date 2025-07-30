@@ -10,6 +10,7 @@ cd /d %~dp0
 :: Ensure _Backup directory and its subdirectories exist
 if not exist "_Backup\Screenshots" mkdir "_Backup\Screenshots"
 if not exist "_Backup\Mappings" mkdir "_Backup\Mappings"
+if not exist "_Backup\CustomCharacters" mkdir "_Backup\CustomCharacters"
 
 :: Iterate over each directory
 for %%d in (%DIRS%) do (
@@ -56,6 +57,26 @@ for %%d in (%DIRS%) do (
         mkdir "user\client\0\Controls"
         echo Creating symbolic link in %%d pointing to ..\_Backup\Mappings...
         mklink /D "user\client\0\Controls\Mappings" "..\..\..\..\..\_Backup\Mappings"
+    )
+    
+    :: Check and handle Custom Characters directory
+    if exist "user\client\0\CustomCharacters" (
+        dir "user\client\0" | find /i "<SYMLINKD>" | find /i "CustomCharacters" >nul
+        if errorlevel 1 (
+            REM The folder is not a symbolic link.
+            echo Moving contents of CustomCharacters from %%d to _Backup\CustomCharacters...
+            xcopy "user\client\0\CustomCharacters\*" "..\_Backup\CustomCharacters\" /S /I /Y
+            rd /s /q "user\client\0\CustomCharacters"
+            echo Creating symbolic link in %%d pointing to ..\_Backup\CustomCharacters...
+            mklink /D "user\client\0\CustomCharacters" "..\..\..\..\_Backup\CustomCharacters"
+        ) else (
+            REM The folder is a symbolic link. Do nothing
+        )
+    ) else (
+        echo Creating directory structure for CustomCharacters in %%d...
+        mkdir "user\client\0"
+        echo Creating symbolic link in %%d pointing to ..\_Backup\CustomCharacters...
+        mklink /D "user\client\0\CustomCharacters" "..\..\..\..\_Backup\CustomCharacters"
     )
 
     :: Go back to the _Backup directory
